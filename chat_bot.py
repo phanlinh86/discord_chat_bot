@@ -4,8 +4,7 @@
         Main function for chat_bot which monitor discord chat log from user and reply accordingly
         The bot currently support following tasks :
         1. Return crypto ticker price
-
-
+        2. Return stock price with chart from morning_star database ( which doesn't require API key )
 """
 
 import discord
@@ -53,6 +52,10 @@ async def on_message(message):
             print(msg_array)
             if len(msg_array) > 1:
                 time_frame = msg_array[1]
+                if len(msg_array) >= 3:
+                    candle_width = msg_array[2].upper()
+                else:
+                    candle_width = '1D'
                 current_time = datetime.datetime.now()
                 if time_frame[-1] is 'D':
                     end_date = current_time.strftime('%Y-%m-%d')
@@ -72,13 +75,15 @@ async def on_message(message):
             else:
                 start_date = ''
                 end_date = ''
+                candle_width = '1D'
             print(start_date, end_date)
             try:
                 stock_price = stock.get_price(symbol,start_date,end_date)
                 # Get stock price
                 msg = 'Last Price is %.2f USD' % stock_price.iloc[-1]['Close']
+                print(msg)
                 # Update candlestick plot
-                candle_stick_plot(stock_price, '%s stock price' % symbol, STOCK_GRAPH_FILE )
+                candle_stick_plot(stock_price, '%s stock price' % symbol, STOCK_GRAPH_FILE, candle_width)
                 # Send message and file to discord
                 await client.send_message(message.channel, msg)
                 await client.send_file(message.channel, STOCK_GRAPH_FILE)
