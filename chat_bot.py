@@ -12,8 +12,11 @@ import discord
 import crypto
 import stock
 from graph import candle_stick_plot
+import datetime
 
-STOCK_GRAPH_FILE = 'stock.html'
+
+
+STOCK_GRAPH_FILE = 'stock.png'
 
 TOKEN = input('Your discord token : ')
 
@@ -22,8 +25,6 @@ client = discord.Client()
 @client.event
 async def on_message(message):
     # we do not want the bot to reply to itself
-    print(message.channel.name)
-    print(message.content)
     if message.author == client.user:
         pass
     # says hello
@@ -45,11 +46,35 @@ async def on_message(message):
 
     # get stock price
     elif message.channel.name == 'stock':
+        print('debug : %s' % message.content )
         if message.content[0] is '!':
-            symbol = message.content[1:].upper()
-            print(symbol)
+            msg_array  = message.content[1:].upper().split(' ')
+            symbol = msg_array[0]
+            print(msg_array)
+            if len(msg_array) > 1:
+                time_frame = msg_array[1]
+                current_time = datetime.datetime.now()
+                if time_frame[-1] is 'D':
+                    end_date = current_time.strftime('%Y-%m-%d')
+                    start_date = (current_time - datetime.timedelta(days= int(time_frame[:-1]))).strftime('%Y-%m-%d')
+                elif time_frame[-1] is 'W':
+                    end_date = current_time.strftime('%Y-%m-%d')
+                    start_date = (current_time - datetime.timedelta(days= int(time_frame[:-1])*7)).strftime('%Y-%m-%d')
+                elif time_frame[-1] is 'M':
+                    end_date = current_time.strftime('%Y-%m-%d')
+                    start_date = (current_time - datetime.timedelta(days= int(time_frame[:-1])*30)).strftime('%Y-%m-%d')
+                elif time_frame[-1] is 'Y':
+                    end_date = current_time.strftime('%Y-%m-%d')
+                    start_date = (current_time - datetime.timedelta(days= int(time_frame[:-1])*365)).strftime('%Y-%m-%d')
+                else:
+                    start_date = ''
+                    end_date = ''
+            else:
+                start_date = ''
+                end_date = ''
+            print(start_date, end_date)
             try:
-                stock_price = stock.get_price(symbol)
+                stock_price = stock.get_price(symbol,start_date,end_date)
                 # Get stock price
                 msg = 'Last Price is %.2f USD' % stock_price.iloc[-1]['Close']
                 # Update candlestick plot
