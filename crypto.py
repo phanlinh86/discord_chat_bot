@@ -16,7 +16,7 @@ import json
 import pandas as pd
 
 # Global constants
-TICKER_KEYS = ['Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High']
+TICKER_KEYS = ['Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High', 'Change']
 LIST_EXCHANGE = ['BITTREX', 'BITFINEX', 'BINANCE']
 CMC_FILE_NAME = 'cmc_list.csv'
 
@@ -28,11 +28,14 @@ def get_ticker_bittrex(ticker1, ticker2):
     :param ticker2: target ticker (ex: BTC, LTC, .. )
     :return: A dict includes following price information : 'Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High'
     """
+    if ticker1.upper() == 'USD':
+        ticker1 = 'USDT'
     # Grab ticker from Bittrex
     response = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummary?market=%s-%s' % (ticker1.lower(), ticker2.lower()))
     web_data = json.loads(response.text)
     # Process data
-    data = {key: web_data['result'][0][key] for key in TICKER_KEYS}
+    data = {key: web_data['result'][0][key] for key in TICKER_KEYS[:-1]}
+    data['Change'] = ( web_data['result'][0]['Last'] - web_data['result'][0]['PrevDay'] ) / web_data['result'][0]['PrevDay'] * 100
     return data
 
 
@@ -43,15 +46,16 @@ def get_ticker_bitfinex(ticker1, ticker2):
     :param ticker2: target ticker (ex: BTC, LTC, .. )
     :return: A dict includes following price information : 'Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High'
     """
-    BITFINEX_TICKER_LOC = [1, 3, 8, 7, 10, 9]
+    BITFINEX_TICKER_LOC = [1, 3, 8, 7, 10, 9, 6]
     # Bitfinex using USD instead of USDT
-    if ticker1 == 'USDT':
+    if ticker1.upper() == 'USDT':
         ticker1 = 'USD'
     # Grab ticker from Bitfinex
     response = requests.get('https://api.bitfinex.com/v2/tickers?symbols=t%s%s' % (ticker2.upper(), ticker1.upper()))
     web_data = json.loads(response.text)
     # Process data
     data = {key: web_data[0][BITFINEX_TICKER_LOC[idx]] for idx, key in enumerate(TICKER_KEYS)}
+    data['Change'] = data['Change'] * 100
     return data
 
 
@@ -62,7 +66,9 @@ def get_ticker_binance(ticker1, ticker2):
     :param ticker2: target ticker (ex: BTC, LTC, .. )
     :return: A dict includes following price information : 'Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High'
     """
-    BINANCE_TICKER_LOC = [7, 9, 15, 5, 13, 12]
+    if ticker1.upper() == 'USD':
+        ticker1 = 'USDT'
+    BINANCE_TICKER_LOC = [7, 9, 15, 5, 13, 12, 2]
     # Grab ticker from Binance
     response = requests.get('https://api.binance.com/api/v1/ticker/24hr?symbol=%s%s' % (ticker2.upper(), ticker1.upper()))
     web_data = json.loads(response.text)
@@ -103,22 +109,24 @@ def get_ticker_cmc(ticker):
     try:
         cmc_data_frame = get_cmc_list()
     except:
-        # For 1st time run or excel file which store coinmarketcap list doesn't exist, update the file first
+        # For 1st time run or excel file which stores coinmarketcap list doesn't exist, update the file first
         update_cmc_list()
         cmc_data_frame = get_cmc_list()
 
-    # Check whether ticker supported by coin market cap. It will return empty if no support
+    # Check whether ticker supported by coin market cap. It will return empty if there is no support
     ticker_name = cmc_data_frame[cmc_data_frame['Symbol'] == ticker]['Name']
     if ticker_name.empty:
         return []
     else:
         ticker_name = ticker_name.iloc[0]
-        # Now retrieve information of the ticker from coin market cap
+        # Now retrieve ticker information from coin market cap
         response = requests.get('https://api.coinmarketcap.com/v1/ticker/%s' % ticker_name)
         web_data = json.loads(response.text)
-        return {    'volume': float(web_data[0]['24h_volume_usd']),
-                    'price_usd': float(web_data[0]['price_usd']),
-                    'price_btc': float(web_data[0]['price_btc'])}
+        return web_data[0]
+
+        #return {    'volume': float(web_data[0]['24h_volume_usd']),
+        #            'price_usd': float(web_data[0]['price_usd']),
+        #            'price_btc': float(web_data[0]['price_btc'])}
 
 
 def get_price(ticker1='USDT', ticker2='BTC', exchange='BITTREX'):
@@ -145,9 +153,11 @@ def get_price_summary(ticker1='USDT', ticker2='BTC'):
     :param ticker2: target ticker (ex: BTC, LTC, .. )
     :return: A dict includes following price information : 'Bid', 'Ask', 'BaseVolume', 'Last', 'Low', 'High'
     """
-    data = []
+    data = {}
+    pd.options.display.float_format = '{:,.2f}'.format
     for exchange in LIST_EXCHANGE:
-        data.append({exchange:list(get_price(ticker1, ticker2, exchange).values())})
+        data[exchange] = list(get_price(ticker1, ticker2, exchange).values())
+    data = pd.DataFrame(data, index=TICKER_KEYS)
     return data
 
 

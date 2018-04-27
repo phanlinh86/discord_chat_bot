@@ -6,20 +6,23 @@
         1. Return crypto ticker price
         2. Return stock price with chart from morning_star database ( which doesn't require API key )
 """
-
+from chat_bot_param import *
 import discord
 import crypto
 import stock
-from graph import candle_stick_plot
+from graph import candle_stick_plot,render_mpl_table
 import datetime
-
-
+import pandas as pd
 
 STOCK_GRAPH_FILE = 'stock.png'
+CRYPTO_BALANCE_FILE = 'crypto_balance.png'
+CRYPTO_TICKER_FILE = 'crypto_ticker.png'
 
 TOKEN = input('Your discord token : ')
 
 client = discord.Client()
+
+
 
 @client.event
 async def on_message(message):
@@ -35,13 +38,31 @@ async def on_message(message):
     elif message.channel.name == 'crypto':
         if message.content[0] is '!':
             ticker = message.content[1:].upper()
-            ticker_info = crypto.get_ticker_cmc(ticker)
-            if ticker_info:
-                msg = '%s: $%.2f USD / $%.2f BTC / Volume = %d USD' % (ticker, ticker_info['price_usd'], ticker_info['price_btc'], ticker_info['volume'])
+            print(ticker)
+            if ticker == 'BALANCE': # !balance for check balance
+                try:
+                    data = crypto.watch_price(list_ticker, exchange)
+                    data.index.name = 'Description'
+                    render_mpl_table(data.reset_index(), file_name=CRYPTO_BALANCE_FILE)
+                    usd_amount = data.sum(axis=1)['USD']
+                    await client.send_message(message.channel, 'Your Balance: %.2f' % usd_amount)
+                    await client.send_file(message.channel, CRYPTO_BALANCE_FILE)
+                except:
+                    print('There is an error')
+                    await client.send_file(message.channel, CRYPTO_BALANCE_FILE)
             else:
-                msg = 'There is no info about this ticker in coinmarketcap yet !!'
-            await client.send_message(message.channel, msg)
-            # await client.send_file(message.channel, 'test_img.png')
+                ticker_info = crypto.get_ticker_cmc(ticker)
+                if ticker_info:
+                    data = pd.DataFrame.from_dict(ticker_info, 'index')
+                    data.index.name = 'Description'
+                    data.columns = ['Info']
+                    render_mpl_table(data.reset_index(), file_name=CRYPTO_TICKER_FILE)
+                    msg = '%s: %s USD / %s BTC / Volume = %s USD' % (ticker, ticker_info['price_usd'], ticker_info['price_btc'], ticker_info['24h_volume_usd'])
+                    await client.send_message(message.channel, msg)
+                    await client.send_file(message.channel, CRYPTO_TICKER_FILE)
+                else:
+                    msg = 'There is no info about this ticker in coinmarketcap yet !!'
+                    await client.send_message(message.channel, msg)
 
     # get stock price
     elif message.channel.name == 'stock':
